@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <sys/time.h>
 #include <vector>
+#include "net/address.h"
 
 #define DISALLOW_COPY_AND_ASSIGN(_Class) \
 	_Class(const _Class &);				\
