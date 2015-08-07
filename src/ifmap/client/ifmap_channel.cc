@@ -303,7 +303,8 @@ void IFMapChannel::DoSslHandshakeInMainThr(bool is_ssrc) {
 
     // Calling openssl api directly because boost doesn't provide a way to set
     // the cipher
-    SSL_set_cipher_list(socket->native_handle(), "RC4-SHA");
+    // commenting out as open jdk not supportin rc based ciphering 
+    //SSL_set_cipher_list(socket->native_handle(), "RC4-SHA");
 
     // handshake as 'client'
     socket->async_handshake(boost::asio::ssl::stream_base::client,
