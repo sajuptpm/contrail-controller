@@ -374,7 +374,14 @@ class OpenstackDriver(vnc_plugin_base.Resync):
                 self._ks_project_get(name=name)
             project_id = ks_project['id']
             display_name = name
-
+        
+        if None == self._vnc_default_domain_id:
+            vnc_domains = self._vnc_lib.domains_list()['domains']
+            for dom in vnc_domains:
+                if dom['fq_name'] == ['default-domain']:
+                    self._vnc_default_domain_id = dom['uuid']
+                    break
+        
         domain_uuid = self._ksv3_domain_id_to_uuid(ks_project['domain_id'])
         dom_obj = self._vnc_lib.domain_read(id=domain_uuid)
 
