@@ -16,6 +16,7 @@ import logging.handlers
 import Queue
 import ConfigParser
 import keystoneclient.v2_0.client as keystone
+import keystoneclient.v3.client as keystonev3
 
 import cfgm_common
 try:
@@ -52,6 +53,21 @@ def fill_keystone_opts(obj, conf_sections):
         obj._insecure = True
 
     try:
+        obj._certfile = conf_sections.get('KEYSTONE', 'certfile')
+    except ConfigParser.NoOptionError:
+        obj._certfile = ''
+ 
+    try:
+        obj._keyfile = conf_sections.get('KEYSTONE', 'keyfile')
+    except ConfigParser.NoOptionError:
+        obj._keyfile = ''
+ 
+    try:
+        obj._cafile= conf_sections.get('KEYSTONE', 'cafile')
+    except ConfigParser.NoOptionError:
+        obj._cafile = ''
+
+    try:
         obj._auth_url = conf_sections.get('KEYSTONE', 'auth_url')
     except ConfigParser.NoOptionError:
         # deprecated knobs - for backward compat
@@ -65,6 +81,45 @@ def fill_keystone_opts(obj, conf_sections):
     except ConfigParser.NoOptionError:
         obj._err_file = '/var/log/contrail/vnc_openstack.err'
 
+    try:
+         # Duration between polls to keystone to find deleted projects
+        resync_interval = conf_sections.get('DEFAULTS',
+                                             'keystone_resync_interval_secs')
+    except ConfigParser.NoOptionError:
+        resync_interval = '60'
+    obj._resync_interval_secs = int(resync_interval)
+ 
+    try:
+        # Number of workers used to process keystone project resyncing
+        resync_workers = conf_sections.get('DEFAULTS',
+                                            'keystone_resync_workers')
+    except ConfigParser.NoOptionError:
+        resync_workers = '10'
+    obj._resync_number_workers = int(resync_workers)
+ 
+    try:
+        # Get the domain_id for keystone v3
+        obj._domain_id = conf_sections.get('KEYSTONE', 'admin_domain_id')
+    except ConfigParser.NoOptionError:
+        obj._domain_id = 'default'
+ 
+    try:
+        # Get the user_domain_name for keystone v3
+        obj._user_domain_name = conf_sections.get('KEYSTONE', 'admin_user_domain_name')
+    except ConfigParser.NoOptionError:
+        obj._user_domain_name = 'Default'
+
+    try:
+        # Get the project_domain_name for keystone v3
+        obj._project_domain_name = conf_sections.get('KEYSTONE', 'project_domain_name')
+    except ConfigParser.NoOptionError:
+        obj._project_domain_name = 'Default'
+
+    try:
+        # Get the project_name for keystone v3
+        obj._project_name = conf_sections.get('KEYSTONE', 'project_name')
+    except ConfigParser.NoOptionError:
+        obj._project_name = obj._admin_tenant
 
 openstack_driver = None
 class OpenstackDriver(vnc_plugin_base.Resync):
@@ -81,7 +136,7 @@ class OpenstackDriver(vnc_plugin_base.Resync):
         self._config_sections = conf_sections
         fill_keystone_opts(self, conf_sections)
 
-        if 'v3' in self._auth_url.split('/')[-1]:
+        if 'v3' in self._auth_url.split('/')[3]:
             self._get_keystone_conn = self._ksv3_get_conn
             self._ks_domains_list = self._ksv3_domains_list
             self._ks_domain_get = self._ksv3_domain_get
@@ -229,23 +284,50 @@ class OpenstackDriver(vnc_plugin_base.Resync):
     # _ksv2_del_project_from_vnc
 
     def _ksv3_get_conn(self):
-        if self._ks:
-            return
-
-        self._ks = requests.Session()
-        adapter = requests.adapters.HTTPAdapter()
-        self._ks.mount("http://", adapter)
-        self._ks.mount("https://", adapter)
+        if not self._ks:
+            if self._admin_token:
+                if self._insecure:
+                   self._ks = keystonev3.Client(token=self._admin_token,
+                                                endpoint=self._auth_url,
+                                                insecure=self._insecure)
+                elif not self._insecure and self._use_certs:
+                   self._ks =  keystonev3.Client(token=self._admin_token,
+                                                 endpoint=self._auth_url,
+                                                 cacert=self._kscertbundle)
+                else:
+                   self._ks =  keystonev3.Client(token=self._admin_token,
+                                                 endpoint=self._auth_url)
+            elif self._project_domain_name:
+                self._ks = keystonev3.Client(user_domain_name=self._user_domain_name,
+                                             username=self._auth_user,
+                                             password=self._auth_passwd,
+                                             project_domain_name=self._project_domain_name,
+                                             project_name=self._project_name,
+                                             auth_url=self._auth_url,
+                                             insecure=self._insecure)
+            else:
+               if self._insecure:
+                  self._ks = keystonev3.Client(user_domain_name=self._user_domain_name,
+                                               username=self._auth_user,
+                                               password=self._auth_passwd,
+                                               domain_id=self._domain_id,
+                                               auth_url=self._auth_url,
+                                               insecure=self._insecure)
+               elif not self._insecure and self._use_certs:
+                     self._ks =  keystonev3.Client(username=self._auth_user,
+                                                   password=self._auth_passwd,
+                                                   tenant_name=self._admin_tenant,
+                                                   auth_url=self._auth_url,
+                                                   cacert=self._kscertbundle)
+               else:
+                     self._ks =  keystonev3.Client(username=self._auth_user,
+                                                   password=self._auth_passwd,
+                                                   tenant_name=self._admin_tenant,
+                                                   auth_url=self._auth_url)
     # end _ksv3_get_conn
 
     def _ksv3_domains_list(self):
-        resp = self._ks.get('%s/domains' %(self._auth_url),
-                            headers={'X-AUTH-TOKEN':self._admin_token})
-        if resp.status_code != 200:
-            raise Exception(resp.text)
-
-        domains_json = resp.text
-        return json.loads(domains_json)['domains']
+        return [{'id': domain.id} for domain in self._ks.domains.list()]
     # end _ksv3_domains_list
 
     def _ksv3_domain_id_to_uuid(self, domain_id):
@@ -256,33 +338,27 @@ class OpenstackDriver(vnc_plugin_base.Resync):
     # _ksv3_domain_id_to_uuid
 
     def _ksv3_domain_get(self, id=None):
-        resp = self._ks.get('%s/domains/%s' %(self._auth_url, id),
-                            headers={'X-AUTH-TOKEN':self._admin_token})
-        if resp.status_code != 200:
-            raise Exception(resp.text)
-
-        domain_json = resp.text
-        return json.loads(domain_json)['domain']
+        try:
+            return {'name': self._ks.domains.get(id).name}
+        except:
+            self._ks = None
+            self._get_keystone_conn()
+            return {'name': self._ks.domains.get(id).name}
     # end _ksv3_domain_get
 
     def _ksv3_projects_list(self):
-        resp = self._ks.get('%s/projects' %(self._auth_url),
-                            headers={'X-AUTH-TOKEN':self._admin_token})
-        if resp.status_code != 200:
-            raise Exception(resp.text)
-
-        projects_json = resp.text
-        return json.loads(projects_json)['projects']
+        return [{'id': project.id} for project in self._ks.projects.list()] 
     # end _ksv3_projects_list
 
     def _ksv3_project_get(self, id=None):
-        resp = self._ks.get('%s/projects/%s' %(self._auth_url, id),
-                            headers={'X-AUTH-TOKEN':self._admin_token})
-        if resp.status_code != 200:
-            raise Exception(resp.text)
-
-        project_json = resp.text
-        return json.loads(project_json)['project']
+        try:
+            project = self._ks.projects.get(id)
+            return {'id': project.id, 'name': project.name, 'domain_id': project.domain_id}
+        except Exception as e:
+            self._ks = None
+            self._get_keystone_conn()
+            project = self._ks.projects.get(id)
+            return {'id': project.id, 'name': project.name, 'domain_id': project.domain_id}
     # end _ksv3_project_get
 
     def _ksv3_sync_project_to_vnc(self, id=None, name=None):
@@ -500,6 +576,7 @@ class OpenstackDriver(vnc_plugin_base.Resync):
             try:
                 retry = self._resync_all_domains()
                 if retry:
+                    gevent.sleep(60)
                     continue
             except Exception as e:
                 self._ks = None
@@ -510,6 +587,7 @@ class OpenstackDriver(vnc_plugin_base.Resync):
             try:
                 retry = self._resync_all_projects()
                 if retry:
+                    gevent.sleep(60)
                     continue
             except Exception as e:
                 self._ks = None
