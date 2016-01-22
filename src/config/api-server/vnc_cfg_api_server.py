@@ -911,6 +911,10 @@ class VncApiServer(VncApiServerGen):
                     secopts.update(dict(config.items("SECURITY")))
             if 'KEYSTONE' in config.sections():
                 ksopts.update(dict(config.items("KEYSTONE")))
+                try:
+                    self.keystone_sync_on_demand = json.loads(ksopts['keystone_sync_on_demand'].lower())
+                except KeyError:
+                    self.keystone_sync_on_demand = True
             if 'QUOTA' in config.sections():
                 for (k, v) in config.items("QUOTA"):
                     try:
@@ -1185,10 +1189,12 @@ class VncApiServer(VncApiServerGen):
             RoutingInstance('__link_local__', link_local_vn))
 
         self._db_conn.db_resync()
-        try:
-            self._extension_mgrs['resync'].map(self._resync_domains_projects)
-        except Exception as e:
-            pass
+
+        if False == self.keystone_sync_on_demand:
+            try:
+                self._extension_mgrs['resync'].map(self._resync_domains_projects)
+            except Exception as e:
+                pass
     # end _db_init_entries
 
     def _resync_domains_projects(self, ext):
