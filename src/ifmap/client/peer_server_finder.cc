@@ -53,7 +53,7 @@ void PeerIFMapServerFinder::PeerIFMapDSSubscribe() {
 
     if (DSExists()) {
         service_name_ = g_vns_constants.IFMAP_SERVER_DISCOVERY_SERVICE_NAME;
-        uint8_t num_instances = 2;
+        uint8_t num_instances = 3;
         ds_client_->Subscribe(service_name_, num_instances,
             boost::bind(&PeerIFMapServerFinder::ProcPeerIFMapDSResp, this, _1));
     }
