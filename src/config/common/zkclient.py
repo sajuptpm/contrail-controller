@@ -14,6 +14,7 @@ from kazoo.retry import KazooRetry
 from bitarray import bitarray
 from cfgm_common.exceptions import ResourceExhaustionError, ResourceExistsError
 from gevent.coros import BoundedSemaphore
+from random import randint
 
 import uuid
 
@@ -116,8 +117,17 @@ class IndexAllocator(object):
                 raise ResourceExhaustionError()
             self._in_use.append(1)
         else:
-            idx = self._in_use.index(0)
-            self._in_use[idx] = 1
+            rindex = randint(0, self._in_use.length())
+            try:
+                idx = self._in_use.index(0, rindex, self._in_use.length())
+                self._in_use[idx] = 1
+            except ValueError:
+                try:
+                    idx = self._in_use.index(0, 0, rindex)
+                    self._in_use[idx] = 1
+                except ValueError:
+                    idx = self._in_use.length()
+                    self._in_use.append(1)
 
         idx = self._get_zk_index_from_bit(idx)
         try:
