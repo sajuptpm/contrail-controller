@@ -280,13 +280,13 @@ class Subnet(object):
         return self._db_conn.subnet_is_addr_allocated(self._name, addr)
     # end is_ip_allocated
 
-    def ip_alloc(self, ipaddr=None):
+    def ip_alloc(self, ipaddr=None, reverse_call=False):
         req = None
         if ipaddr:
             ip = IPAddress(ipaddr)
             req = int(ip)
     
-        addr = self._db_conn.subnet_alloc_req(self._name, req)
+        addr = self._db_conn.subnet_alloc_req(self._name, req, reverse_call=reverse_call)
         if addr:
             return str(IPAddress(addr))
         return None
@@ -294,17 +294,17 @@ class Subnet(object):
 
     # free IP unless it is invalid, excluded or already freed
     @classmethod
-    def ip_free_cls(cls, subnet_fq_name, ip_network, exclude_addrs, ip_addr):
+    def ip_free_cls(cls, subnet_fq_name, ip_network, exclude_addrs, ip_addr, reverse_call=False):
         if ((ip_addr in ip_network) and (ip_addr not in exclude_addrs)):
             if cls._db_conn:
-                cls._db_conn.subnet_free_req(subnet_fq_name, int(ip_addr))
+                cls._db_conn.subnet_free_req(subnet_fq_name, int(ip_addr), reverse_call=reverse_call)
                 return True
 
         return False
     # end ip_free_cls
 
-    def ip_free(self, ip_addr):
-        Subnet.ip_free_cls(self._name, self._network, self._exclude, ip_addr)
+    def ip_free(self, ip_addr, reverse_call=False):
+        Subnet.ip_free_cls(self._name, self._network, self._exclude, ip_addr, reverse_call=reverse_call)
     # end ip_free
 
     # check if IP address belongs to us
@@ -841,7 +841,7 @@ class AddrMgmt(object):
             if not subnet_obj.ip_belongs(ip_addr):
                 continue
 
-            ip_addr = subnet_obj.ip_alloc(ipaddr=ip_addr)
+            ip_addr = subnet_obj.ip_alloc(ipaddr=ip_addr, reverse_call=True)
             break
     # end ip_alloc_notify
 
@@ -920,7 +920,7 @@ class AddrMgmt(object):
             subnet_obj = self._subnet_objs[vn_fq_name_str][subnet_name]
             if Subnet.ip_belongs_to(IPNetwork(subnet_name),
                                     IPAddress(ip_addr)):
-                subnet_obj.ip_free(IPAddress(ip_addr))
+                subnet_obj.ip_free(IPAddress(ip_addr), reverse_call=True)
                 break
     # end ip_free_notify
 

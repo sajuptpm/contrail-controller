@@ -1133,13 +1133,19 @@ class VncZkClient(object):
         return allocator.read(addr)
     # end subnet_is_addr_allocated
 
-    def subnet_alloc_req(self, subnet, addr=None):
+    def subnet_alloc_req(self, subnet, addr=None, reverse_call=False):
         allocator = self._get_subnet_allocator(subnet)
         try:
             if addr is not None:
                 if allocator.read(addr) is not None:
+                    if reverse_call:
+                        ##Sync multinode bitmap
+                        allocator.reserve(addr)
                     return addr
                 else:
+                    if reverse_call:
+                        ##intermediate delete happend for this addr
+                        return None
                     return allocator.reserve(addr)
             else:
                 return allocator.alloc()
@@ -1147,9 +1153,15 @@ class VncZkClient(object):
             return None
     # end subnet_alloc_req
 
-    def subnet_free_req(self, subnet, addr):
+    def subnet_free_req(self, subnet, addr, reverse_call=False):
         allocator = self._get_subnet_allocator(subnet)
+        id_val = None
         if allocator:
+            if reverse_call:
+                id_val = allocator.read(addr)
+                if id_val:
+                    ##intermediate alloc happend for this addr
+                    return None
             allocator.delete(addr)
     # end subnet_free_req
 
@@ -1594,12 +1606,12 @@ class VncDbClient(object):
         return self._zk_db.subnet_is_addr_allocated(subnet, addr)
     # end subnet_is_addr_allocated
 
-    def subnet_alloc_req(self, subnet, addr=None):
-        return self._zk_db.subnet_alloc_req(subnet, addr)
+    def subnet_alloc_req(self, subnet, addr=None, reverse_call=False):
+        return self._zk_db.subnet_alloc_req(subnet, addr, reverse_call=reverse_call)
     # end subnet_alloc_req
 
-    def subnet_free_req(self, subnet, addr):
-        self._zk_db.subnet_free_req(subnet, addr)
+    def subnet_free_req(self, subnet, addr, reverse_call=False):
+        self._zk_db.subnet_free_req(subnet, addr, reverse_call=reverse_call)
     # end subnet_free_req
 
     def subnet_create_allocator(self, subnet, subnet_alloc_list,
