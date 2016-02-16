@@ -337,7 +337,14 @@ class OpenstackDriver(vnc_plugin_base.Resync):
         if domain_id == 'default':
             return self._vnc_default_domain_id
 
-        return str(uuid.UUID(domain_id))
+        try:
+            domain_uuid = str(uuid.UUID(domain_id))
+        except ValueError:
+            domain_id = domain_id + 'ffffffffffffffffffff'
+            domain_uuid = str(uuid.UUID(domain_id))
+        
+        return domain_uuid
+        
     # _ksv3_domain_id_to_uuid
 
     def _ksv3_domain_get(self, id=None):
