@@ -72,6 +72,21 @@ class DBInterface(object):
 
     #end __init__
 
+    def vnc_project_id(self, account_id):
+ 
+        project_id = account_id + 'ffffffffffffffffffff'
+
+        return str(uuid.UUID(project_id))
+
+    def iam_account_id(self, project_id):
+
+        account_id = project_id.replace('-', '')
+
+        if 'ffffffffffffffffffff' == account_id[12:]:
+            return account_id[:12]
+        else:
+            return account_id
+
     # Helper routines
     def _request_api_server(self, url, method, data=None, headers=None):
         if method == 'GET':
@@ -103,7 +118,12 @@ class DBInterface(object):
         return_project_ids = []
         for project_id in project_ids:
             try:
-                return_project_ids.append(str(uuid.UUID(project_id)))
+                project_uuid = str(uuid.UUID(project_id))
+            except ValueError:
+                project_uuid = self.vnc_project_id(project_id)
+            try:
+                #return_project_ids.append(str(uuid.UUID(project_id)))
+                return_project_ids.append(project_uuid)
             except ValueError:
                 continue
 
@@ -191,12 +211,14 @@ class DBInterface(object):
                 # recurse up type-hierarchy
                 tenant_id = self._get_obj_tenant_id('network', net_id)
             else:
-                tenant_id = port_obj.parent_uuid.replace('-', '')
+                #tenant_id = port_obj.parent_uuid.replace('-', '')
+                tenant_id = self.iam_account_id(port_obj.parent_uuid)
             return tenant_id
 
         if q_type == 'network':
             net_obj = self._virtual_network_read(net_id=obj_uuid)
-            tenant_id = net_obj.parent_uuid.replace('-', '')
+            #tenant_id = net_obj.parent_uuid.replace('-', '')
+            tenant_id = self.iam_account_id(net_obj.parent_uuid)
             return tenant_id
 
         return None
@@ -463,6 +485,8 @@ class DBInterface(object):
         if project_id:
             try:
                 project_uuid = str(uuid.UUID(project_id))
+            except ValueError:
+                project_uuid = self.vnc_project_id(project_id)
             except Exception:
                 print "Error in converting uuid %s" % (project_id)
         else:
@@ -483,6 +507,8 @@ class DBInterface(object):
         if project_id:
             try:
                 project_uuid = str(uuid.UUID(project_id))
+            except ValueError:
+                project_uuid = self.vnc_project_id(project_id)
             except Exception:
                 print "Error in converting uuid %s" % (project_id)
                 return []
@@ -500,6 +526,8 @@ class DBInterface(object):
     def _ipam_list_project(self, project_id):
         try:
             project_uuid = str(uuid.UUID(project_id))
+        except ValueError:
+            project_uuid = self.vnc_project_id(project_id)
         except Exception:
             print "Error in converting uuid %s" % (project_id)
 
@@ -512,6 +540,10 @@ class DBInterface(object):
         if project_id:
             try:
                 project_uuid = str(uuid.UUID(project_id))
+                # Trigger a project read to ensure project sync
+                project_obj = self._project_read(proj_id=project_uuid)
+            except ValueError:
+                project_uuid = self.vnc_project_id(project_id)
                 # Trigger a project read to ensure project sync
                 project_obj = self._project_read(proj_id=project_uuid)
             except Exception:
@@ -538,6 +570,8 @@ class DBInterface(object):
     def _route_table_list_project(self, project_id):
         try:
             project_uuid = str(uuid.UUID(project_id))
+        except ValueError:
+            project_uuid = self.vnc_project_id(project_id)
         except Exception:
             print "Error in converting uuid %s" % (project_id)
 
@@ -549,6 +583,8 @@ class DBInterface(object):
     def _svc_instance_list_project(self, project_id):
         try:
             project_uuid = str(uuid.UUID(project_id))
+        except ValueError:
+            project_uuid = self.vnc_project_id(project_id)
         except Exception:
             print "Error in converting uuid %s" % (project_id)
 
@@ -560,6 +596,8 @@ class DBInterface(object):
     def _policy_list_project(self, project_id):
         try:
             project_uuid = str(uuid.UUID(project_id))
+        except ValueError:
+            project_uuid = self.vnc_project_id(project_id)
         except Exception:
             print "Error in converting uuid %s" % (project_id)
 
@@ -927,7 +965,11 @@ class DBInterface(object):
     # Conversion routines between VNC and Quantum objects
     def _svc_instance_neutron_to_vnc(self, si_q, oper):
         if oper == CREATE:
-            project_id = str(uuid.UUID(si_q['tenant_id']))
+            try:
+                project_id = str(uuid.UUID(si_q['tenant_id']))
+            except ValueError:
+                project_id = self.vnc_project_id(si_q['tenant_id'])
+ 
             project_obj = self._project_read(proj_id=project_id)
             net_id = si_q['external_net']
             ext_vn = self._vnc_lib.virtual_network_read(id=net_id)
@@ -950,7 +992,8 @@ class DBInterface(object):
 
         # replace field names
         si_q_dict['id'] = si_obj.uuid
-        si_q_dict['tenant_id'] = si_obj.parent_uuid.replace('-', '')
+        #si_q_dict['tenant_id'] = si_obj.parent_uuid.replace('-', '')
+        si_q_dict['tenant_id'] = self.iam_account_id(si_obj.parent_uuid)
         si_q_dict['name'] = si_obj.name
         si_props = si_obj.get_service_instance_properties()
         if si_props:
@@ -964,7 +1007,12 @@ class DBInterface(object):
 
     def _route_table_neutron_to_vnc(self, rt_q, oper):
         if oper == CREATE:
-            project_id = str(uuid.UUID(rt_q['tenant_id']))
+            #project_id = str(uuid.UUID(rt_q['tenant_id']))
+            try:
+                project_id = str(uuid.UUID(rt_q['tenant_id']))
+            except ValueError:
+                project_id = self.vnc_project_id(rt_q['tenant_id'])
+ 
             project_obj = self._project_read(proj_id=project_id)
             rt_vnc = RouteTable(name=rt_q['name'],
                                 parent_obj=project_obj)
@@ -1009,7 +1057,8 @@ class DBInterface(object):
 
         # replace field names
         rt_q_dict['id'] = rt_obj.uuid
-        rt_q_dict['tenant_id'] = rt_obj.parent_uuid.replace('-', '')
+        #rt_q_dict['tenant_id'] = rt_obj.parent_uuid.replace('-', '')
+        rt_q_dict['tenant_id'] = self.iam_account_id(rt_obj.parent_uuid)
         rt_q_dict['name'] = rt_obj.name
         rt_q_dict['fq_name'] = rt_obj.fq_name
 
@@ -1030,7 +1079,8 @@ class DBInterface(object):
 
         # replace field names
         sg_q_dict['id'] = sg_obj.uuid
-        sg_q_dict['tenant_id'] = sg_obj.parent_uuid.replace('-', '')
+        #sg_q_dict['tenant_id'] = sg_obj.parent_uuid.replace('-', '')
+        sg_q_dict['tenant_id'] = self.iam_account_id(sg_obj.parent_uuid)
         if not sg_obj.display_name:
             # for security groups created directly via vnc_api
             sg_q_dict['name'] = sg_obj.get_fq_name()[-1]
@@ -1052,7 +1102,12 @@ class DBInterface(object):
 
     def _security_group_neutron_to_vnc(self, sg_q, oper):
         if oper == CREATE:
-            project_id = str(uuid.UUID(sg_q['tenant_id']))
+            #project_id = str(uuid.UUID(sg_q['tenant_id']))
+            try:
+                project_id = str(uuid.UUID(sg_q['tenant_id']))
+            except ValueError:
+                project_id = self.vnc_project_id(sg_q['tenant_id'])
+
             project_obj = self._project_read(proj_id=project_id)
             id_perms = IdPermsType(enable=True,
                                    description=sg_q.get('description'))
@@ -1114,7 +1169,8 @@ class DBInterface(object):
                     pass
 
         sgr_q_dict['id'] = sg_rule.get_rule_uuid()
-        sgr_q_dict['tenant_id'] = sg_obj.parent_uuid.replace('-', '')
+        #sgr_q_dict['tenant_id'] = sg_obj.parent_uuid.replace('-', '')
+        sgr_q_dict['tenant_id'] = self.iam_account_id(sg_obj.parent_uuid)
         sgr_q_dict['security_group_id'] = sg_obj.uuid
         sgr_q_dict['ethertype'] = sg_rule.get_ethertype()
         sgr_q_dict['direction'] = direction
@@ -1184,7 +1240,12 @@ class DBInterface(object):
         except KeyError:
             external_attr = attr.ATTR_NOT_SPECIFIED
         if oper == CREATE:
-            project_id = str(uuid.UUID(network_q['tenant_id']))
+            #project_id = str(uuid.UUID(network_q['tenant_id']))
+            try:
+                project_id = str(uuid.UUID(network_q['tenant_id']))
+            except ValueError:
+                project_id = self.vnc_project_id(network_q['tenant_id'])
+
             project_obj = self._project_read(proj_id=project_id)
             id_perms = IdPermsType(enable=True)
             net_obj = VirtualNetwork(net_name, project_obj, id_perms=id_perms)
@@ -1258,7 +1319,8 @@ class DBInterface(object):
             net_q_dict['name'] = net_obj.display_name
 
         extra_dict['contrail:fq_name'] = net_obj.get_fq_name()
-        net_q_dict['tenant_id'] = net_obj.parent_uuid.replace('-', '')
+        #net_q_dict['tenant_id'] = net_obj.parent_uuid.replace('-', '')
+        net_q_dict['tenant_id'] = self.iam_account_id(net_obj.parent_uuid)
         net_q_dict['admin_state_up'] = id_perms.enable
         if net_obj.is_shared:
             net_q_dict['shared'] = True
@@ -1377,7 +1439,8 @@ class DBInterface(object):
             sn_q_dict['name'] = sn_name
         else:
             sn_q_dict['name'] = ''
-        sn_q_dict['tenant_id'] = net_obj.parent_uuid.replace('-', '')
+        #sn_q_dict['tenant_id'] = net_obj.parent_uuid.replace('-', '')
+        sn_q_dict['tenant_id'] = self.iam_account_id(net_obj.parent_uuid)
         sn_q_dict['network_id'] = net_obj.uuid
         sn_q_dict['ipv6_ra_mode'] = None
         sn_q_dict['ipv6_address_mode'] = None
@@ -1453,7 +1516,12 @@ class DBInterface(object):
     def _ipam_neutron_to_vnc(self, ipam_q, oper):
         ipam_name = ipam_q.get('name', None)
         if oper == CREATE:
-            project_id = str(uuid.UUID(ipam_q['tenant_id']))
+            #project_id = str(uuid.UUID(ipam_q['tenant_id']))
+            try:
+                project_id = str(uuid.UUID(ipam_q['tenant_id']))
+            except ValueError:
+                project_id = self.vnc_project_id(ipam_q['tenant_id'])
+
             project_obj = self._project_read(proj_id=project_id)
             ipam_obj = NetworkIpam(ipam_name, project_obj)
         else:  # READ/UPDATE/DELETE
@@ -1478,7 +1546,8 @@ class DBInterface(object):
         # replace field names
         ipam_q_dict['id'] = ipam_q_dict.pop('uuid')
         ipam_q_dict['name'] = ipam_obj.name
-        ipam_q_dict['tenant_id'] = ipam_obj.parent_uuid.replace('-', '')
+        #ipam_q_dict['tenant_id'] = ipam_obj.parent_uuid.replace('-', '')
+        ipam_q_dict['tenant_id'] = self.iam_account_id(ipam_obj.parent_uuid)
         ipam_q_dict['mgmt'] = ipam_q_dict.pop('network_ipam_mgmt', None)
         net_back_refs = ipam_q_dict.pop('virtual_network_back_refs', None)
         if net_back_refs:
@@ -1493,7 +1562,12 @@ class DBInterface(object):
     def _policy_neutron_to_vnc(self, policy_q, oper):
         policy_name = policy_q.get('name', None)
         if oper == CREATE:
-            project_id = str(uuid.UUID(policy_q['tenant_id']))
+            #project_id = str(uuid.UUID(policy_q['tenant_id']))
+            try:
+                project_id = str(uuid.UUID(policy_q['tenant_id']))
+            except ValueError:
+                project_id = self.vnc_project_id(policy_q['tenant_id'])
+ 
             project_obj = self._project_read(proj_id=project_id)
             policy_obj = NetworkPolicy(policy_name, project_obj)
         else:  # READ/UPDATE/DELETE
@@ -1511,7 +1585,8 @@ class DBInterface(object):
         # replace field names
         policy_q_dict['id'] = policy_q_dict.pop('uuid')
         policy_q_dict['name'] = policy_obj.name
-        policy_q_dict['tenant_id'] = policy_obj.parent_uuid.replace('-', '')
+        #policy_q_dict['tenant_id'] = policy_obj.parent_uuid.replace('-', '')
+        policy_q_dict['tenant_id'] = self.iam_account_id(policy_obj.parent_uuid)
         policy_q_dict['entries'] = policy_q_dict.pop('network_policy_entries',
                                                      None)
         net_back_refs = policy_obj.get_virtual_network_back_refs()
@@ -1527,7 +1602,12 @@ class DBInterface(object):
     def _router_neutron_to_vnc(self, router_q, oper):
         rtr_name = router_q.get('name', None)
         if oper == CREATE:
-            project_id = str(uuid.UUID(router_q['tenant_id']))
+            #project_id = str(uuid.UUID(router_q['tenant_id']))
+            try:
+                project_id = str(uuid.UUID(router_q['tenant_id']))
+            except ValueError:
+                project_id = self.vnc_project_id(router_q['tenant_id'])
+
             project_obj = self._project_read(proj_id=project_id)
             id_perms = IdPermsType(enable=True)
             rtr_obj = LogicalRouter(rtr_name, project_obj, id_perms=id_perms)
@@ -1562,7 +1642,8 @@ class DBInterface(object):
             rtr_q_dict['name'] = rtr_obj.get_fq_name()[-1]
         else:
             rtr_q_dict['name'] = rtr_obj.display_name
-        rtr_q_dict['tenant_id'] = rtr_obj.parent_uuid.replace('-', '')
+        #rtr_q_dict['tenant_id'] = rtr_obj.parent_uuid.replace('-', '')
+        rtr_q_dict['tenant_id'] = self.iam_account_id(rtr_obj.parent_uuid)
         rtr_q_dict['admin_state_up'] = rtr_obj.get_id_perms().enable
         rtr_q_dict['shared'] = False
         rtr_q_dict['status'] = constants.NET_STATUS_ACTIVE
@@ -1598,7 +1679,11 @@ class DBInterface(object):
             fip_obj = FloatingIp(fip_name, fip_pool_obj)
             fip_obj.uuid = fip_name
 
-            proj_id = str(uuid.UUID(fip_q['tenant_id']))
+            #proj_id = str(uuid.UUID(fip_q['tenant_id']))
+            try:
+                proj_id = str(uuid.UUID(fip_q['tenant_id']))
+            except ValueError:
+                proj_id = self.vnc_project_id(fip_q['tenant_id'])
             proj_obj = self._project_read(proj_id=proj_id)
             fip_obj.set_project(proj_obj)
         else:  # READ/UPDATE/DELETE
@@ -1610,7 +1695,8 @@ class DBInterface(object):
                 port_obj = self._virtual_machine_interface_read(port_id=port_id)
                 if context and not context['is_admin']:
                     port_tenant_id = self._get_obj_tenant_id('port', port_id)
-                    if port_tenant_id.replace('-', '') != context['tenant']:
+                    tenant_id = self.iam_account_id(port_tenant_id)
+                    if tenant_id != context['tenant']:
                         raise NoIdError(port_id)
             except NoIdError:
                 self._raise_contrail_exception('PortNotFound',
@@ -1644,7 +1730,8 @@ class DBInterface(object):
 
         floating_net_id = self._vnc_lib.fq_name_to_id('virtual-network',
                                              fip_obj.get_fq_name()[:-2])
-        tenant_id = fip_obj.get_project_refs()[0]['uuid'].replace('-', '')
+        #tenant_id = fip_obj.get_project_refs()[0]['uuid'].replace('-', '')
+        tenant_id = self.iam_account_id(fip_obj.get_project_refs()[0]['uuid'])
 
         port_id = None
         router_id = None
@@ -1743,7 +1830,12 @@ class DBInterface(object):
 
     def _port_neutron_to_vnc(self, port_q, net_obj, oper):
         if oper == CREATE:
-            project_id = str(uuid.UUID(port_q['tenant_id']))
+            #project_id = str(uuid.UUID(port_q['tenant_id']))
+            try:
+                project_id = str(uuid.UUID(port_q['tenant_id']))
+            except ValueError:
+                project_id = self.vnc_project_id(port_q['tenant_id'])
+
             proj_obj = self._project_read(proj_id=project_id)
             id_perms = IdPermsType(enable=True)
             port_uuid = str(uuid.uuid4())
@@ -1935,9 +2027,11 @@ class DBInterface(object):
             port_req_memo['subnets'][net_id] = subnets_info
 
         if port_obj.parent_type != "project":
-            proj_id = net_obj.parent_uuid.replace('-', '')
+            #proj_id = net_obj.parent_uuid.replace('-', '')
+            proj_id = self.iam_account_id(net_obj.parent_uuid)
         else:
-            proj_id = port_obj.parent_uuid.replace('-', '')
+            #proj_id = port_obj.parent_uuid.replace('-', '')
+            proj_id = self.iam_account_id(port_obj.parent_uuid)
 
         port_q_dict['tenant_id'] = proj_id
         port_q_dict['network_id'] = net_id
@@ -2318,7 +2412,12 @@ class DBInterface(object):
                   'shared' in filters):
                 all_net_objs.extend(self._network_list_shared_and_ext())
             else:
-                project_uuid = str(uuid.UUID(context['tenant']))
+                #project_uuid = str(uuid.UUID(context['tenant']))
+                try:
+                    project_uuid = str(uuid.UUID(context['tenant']))
+                except ValueError:
+                    project_uuid = self.vnc_project_id(context['tenant'])
+
                 if not filters:
                     all_net_objs.extend(self._network_list_router_external())
                     all_net_objs.extend(self._network_list_shared())
@@ -2397,7 +2496,15 @@ class DBInterface(object):
         if filters and ('tenant_id' not in filters or len(filters.keys()) > 1):
             return None
 
-        project_ids = filters.get('tenant_id') if filters else None
+        tenant_id = filters.get('tenant_id')[0]
+
+        if tenant_id:
+            try:
+                tenant_uuid = str(uuid.UUID(tenant_id))
+                project_ids = filters.get('tenant_id') if filters else None
+            except ValueError:
+                project_ids = tenant_id + 'ffffffffffffffffffff'
+
         if not isinstance(project_ids, list):
             project_ids = [project_ids]
 
@@ -3379,7 +3486,12 @@ class DBInterface(object):
                 port_ids = filters['port_id']
         else:  # no filters
             if not context['is_admin']:
-                proj_ids = [str(uuid.UUID(context['tenant']))]
+                #proj_ids = [str(uuid.UUID(context['tenant']))]
+                try:
+                    proj_ids = [str(uuid.UUID(context['tenant']))]
+                except ValueError:
+                    project_ids = self.vnc_project_id(context['tenant'])
+                    proj_ids = [project_ids] 
 
         if port_ids:
             fip_objs = self._floatingip_list(back_ref_id=port_ids)
@@ -3479,7 +3591,11 @@ class DBInterface(object):
         net_id = port_q['network_id']
         net_obj = self._network_read(net_id)
         tenant_id = self._get_tenant_id_for_create(context, port_q);
-        proj_id = str(uuid.UUID(tenant_id))
+        #proj_id = str(uuid.UUID(tenant_id))
+        try:
+            proj_id = str(uuid.UUID(tenant_id))
+        except ValueError:
+            proj_id = self.vnc_project_id(tenant_id)
 
         # if mac-address is specified, check against the exisitng ports
         # to see if there exists a port with the same mac-address
@@ -3649,7 +3765,11 @@ class DBInterface(object):
              return ret_q_ports
 
         if not context['is_admin']:
-            project_id = str(uuid.UUID(context['tenant']))
+            #project_id = str(uuid.UUID(context['tenant']))
+            try:
+                project_id = str(uuid.UUID(context['tenant']))
+            except ValueError:
+                project_id = self.vnc_project_id(context['tenant'])
         else:
             project_id = None
 
@@ -3664,7 +3784,11 @@ class DBInterface(object):
                 all_project_ids = self._validate_project_ids(context,
                                                              filters['tenant_id'])
             elif 'name' in filters:
-                all_project_ids = [str(uuid.UUID(context['tenant']))]
+                #all_project_ids = [str(uuid.UUID(context['tenant']))]
+                try:
+                    all_project_ids = [str(uuid.UUID(context['tenant']))]
+                except ValueError:
+                    all_project_ids = self.vnc_project_id(context['tenant'])
             elif 'id' in filters:
                 # TODO optimize
                 for port_id in filters['id']:
@@ -3731,9 +3855,17 @@ class DBInterface(object):
 
         if 'tenant_id' in filters:
             if isinstance(filters['tenant_id'], list):
-                project_id = str(uuid.UUID(filters['tenant_id'][0]))
+                #project_id = str(uuid.UUID(filters['tenant_id'][0]))
+                try:
+                    project_id = str(uuid.UUID(filters['tenant_id'][0]))
+                except ValueError:
+                    project_id = self.vnc_project_id(filters['tenant_id'][0])
             else:
-                project_id = str(uuid.UUID(filters['tenant_id']))
+                #project_id = str(uuid.UUID(filters['tenant_id']))
+                try:
+                    project_id = str(uuid.UUID(filters['tenant_id']))
+                except ValueError:
+                    project_id = self.vnc_project_id(filters['tenant_id'])
 
             nports = self._port_list_project(project_id, count=True)
         else:
@@ -3806,7 +3938,12 @@ class DBInterface(object):
         # collect phase
         all_sgs = []  # all sgs in all projects
         if context and not context['is_admin']:
-            project_sgs = self._security_group_list_project(str(uuid.UUID(context['tenant'])))
+            #project_sgs = self._security_group_list_project(str(uuid.UUID(context['tenant'])))
+            try:
+                project_id = str(uuid.UUID(context['tenant']))
+            except ValueError:
+                project_id = self.vnc_project_id(context['tenant'])
+            project_sgs = self._security_group_list_project(project_id)
             all_sgs.append(project_sgs)
         else: # admin context
             if filters and 'tenant_id' in filters:
@@ -3944,8 +4081,12 @@ class DBInterface(object):
         else:  # no filters
             p_id = None
             if context and not context['is_admin']:
-                p_id = str(uuid.UUID(context['tenant']))
-            all_sgs.append(self._security_group_list_project(p_id))
+                #p_id = str(uuid.UUID(context['tenant']))
+                try:
+                    p_id = str(uuid.UUID(context['tenant']))
+                except ValueError:
+                    p_id = self.vnc_project_id(context['tenant'])
+                all_sgs.append(self._security_group_list_project(p_id))
 
         # prune phase
         for project_sgs in all_sgs:
@@ -4005,7 +4146,12 @@ class DBInterface(object):
                 project_rts = self._route_table_list_project(p_id)
                 all_rts.append(project_rts)
         elif filters and 'name' in filters:
-            p_id = str(uuid.UUID(context['tenant']))
+            #p_id = str(uuid.UUID(context['tenant']))
+            try:
+                p_id = str(uuid.UUID(context['tenant']))
+            except ValueError:
+                p_id = self.vnc_project_id(context['tenant'])
+
             project_rts = self._route_table_list_project(p_id)
             all_rts.append(project_rts)
         else:  # no filters
@@ -4065,7 +4211,11 @@ class DBInterface(object):
                 project_sis = self._svc_instance_list_project(p_id)
                 all_sis.append(project_sis)
         elif filters and 'name' in filters:
-            p_id = str(uuid.UUID(context['tenant']))
+            #p_id = str(uuid.UUID(context['tenant']))
+            try:
+                p_id = str(uuid.UUID(context['tenant']))
+            except ValueError:
+                p_id = self.vnc_project_id(context['tenant'])
             project_sis = self._svc_instance_list_project(p_id)
             all_sis.append(project_sis)
         else:  # no filters

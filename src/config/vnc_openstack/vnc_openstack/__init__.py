@@ -226,20 +226,23 @@ class OpenstackDriver(vnc_plugin_base.Resync):
     # end _ksv2_projects_list
 
     def _ksv2_project_get(self, id):
-        # Note: under certain circumstances (if it has been initailized
-        # before endpoints are populated in keystone) keystoneclient may
-        # be valid to list projects, but not to read them. As it won't
-        # be reset by resync_all_projects, it is reseted on error here.
-        try:
-            return {'name': self._ks.tenants.get(id).name}
-        except Exception as e:
-            self._ks = None
-            self._get_keystone_conn()
-            return {'name': self._ks.tenants.get(id).name}
+        if True == self._keystone_sync_on_demand:
+            return {'name': "Customer-" + id}
+        else:
+           # Note: under certain circumstances (if it has been initailized
+           # before endpoints are populated in keystone) keystoneclient may
+           # be valid to list projects, but not to read them. As it won't
+           # be reset by resync_all_projects, it is reseted on error here.
+            try:
+                return {'name': self._ks.tenants.get(id).name}
+            except Exception as e:
+                self._ks = None
+                self._get_keystone_conn()
+                return {'name': self._ks.tenants.get(id).name}
     # end _ksv2_project_get
 
     def _ksv2_sync_project_to_vnc(self, id=None):
-        self._get_keystone_conn()
+        #self._get_keystone_conn()
         self._get_vnc_conn()
         ks_project = self._ks_project_get(id=id.replace('-', ''))
         display_name = ks_project['name']
@@ -334,35 +337,51 @@ class OpenstackDriver(vnc_plugin_base.Resync):
         if domain_id == 'default':
             return self._vnc_default_domain_id
 
-        return str(uuid.UUID(domain_id))
+        try:
+            domain_uuid = str(uuid.UUID(domain_id))
+        except ValueError:
+            domain_id = domain_id + 'ffffffffffffffffffff'
+            domain_uuid = str(uuid.UUID(domain_id))
+        
+        return domain_uuid
+        
     # _ksv3_domain_id_to_uuid
 
     def _ksv3_domain_get(self, id=None):
-        try:
-            return {'name': self._ks.domains.get(id).name}
-        except:
-            self._ks = None
-            self._get_keystone_conn()
-            return {'name': self._ks.domains.get(id).name}
-    # end _ksv3_domain_get
+        if True == self._keystone_sync_on_demand:
+            dom_name = "Domain-"+id
+            return {'name': dom_name}
+        else:
+            try:
+                return {'name': self._ks.domains.get(id).name}
+            except:
+                self._ks = None
+                self._get_keystone_conn()
+                return {'name': self._ks.domains.get(id).name}
+    #end _ksv3_domain_get
+
 
     def _ksv3_projects_list(self):
         return [{'id': project.id} for project in self._ks.projects.list()] 
     # end _ksv3_projects_list
 
     def _ksv3_project_get(self, id=None):
-        try:
-            project = self._ks.projects.get(id)
-            return {'id': project.id, 'name': project.name, 'domain_id': project.domain_id}
-        except Exception as e:
-            self._ks = None
-            self._get_keystone_conn()
-            project = self._ks.projects.get(id)
-            return {'id': project.id, 'name': project.name, 'domain_id': project.domain_id}
+        if True == self._keystone_sync_on_demand:
+            cust_name = "Customer-"+id
+            return {'id': id, 'name': cust_name, 'domain_id': 'default'}
+        else:
+            try:
+                project = self._ks.projects.get(id)
+                return {'id': project.id, 'name': project.name, 'domain_id': project.domain_id}
+            except Exception as e:
+                self._ks = None
+                self._get_keystone_conn()
+                project = self._ks.projects.get(id)
+                return {'id': project.id, 'name': project.name, 'domain_id': project.domain_id}
     # end _ksv3_project_get
 
     def _ksv3_sync_project_to_vnc(self, id=None, name=None):
-        self._get_keystone_conn()
+        #self._get_keystone_conn()
         self._get_vnc_conn()
         if id:
             ks_project = \
@@ -426,7 +445,7 @@ class OpenstackDriver(vnc_plugin_base.Resync):
     # _ksv3_del_project_from_vnc
 
     def sync_domain_to_vnc(self, domain_id):
-        self._get_keystone_conn()
+        #self._get_keystone_conn()
         self._get_vnc_conn()
         ks_domain = \
             self._ks_domain_get(domain_id.replace('-', ''))
