@@ -113,7 +113,12 @@ class DBInterface(object):
 
     def _validate_project_ids(self, context, project_ids):
         if context and not context['is_admin']:
-            return [context['tenant']]
+            if 12 == len(context['tenant']):
+                tenant = context['tenant']
+                tenant_id = tenant + 'ffffffffffffffffffff'
+                return [tenant_id]
+            else:
+                return [context['tenant']]
 
         return_project_ids = []
         for project_id in project_ids:
@@ -813,10 +818,28 @@ class DBInterface(object):
             if key_name in filters:
                 try:
                     if key_name == 'tenant_id':
-                        filter_value = [str(uuid.UUID(t_id)) \
-                                        for t_id in filters[key_name]]
-                    else:
+                        try:
+                            filter_value = [str(uuid.UUID(t_id)) \
+                                            for t_id in filters[key_name]]
+                        except ValueError:
+                            itera = 0
+                            for t_id in filters[key_name]:
+                                tenant_id = filters[key_name][itera]
+                                if 12 == len(tenant_id):
+                                    tenant_id = tenant_id + 'ffffffffffffffffffff'
+                                filters[key_name][itera] = tenant_id
+                                itera = itera+1
+
+                            filter_value = [str(uuid.UUID(t_id)) \
+                                            for t_id in filters[key_name]]
+                    else
                         filter_value = filters[key_name]
+                    if key_name == 'tenant_id':
+                        try:
+                            match_value = str(uuid.UUID(match_value))
+                        except ValueError:
+                            match_value = match_value + 'ffffffffffffffffffff'
+                            match_value = str(uuid.UUID(match_value))
                     idx = filter_value.index(match_value)
                 except ValueError:  # not in requested list
                     return False
@@ -3772,7 +3795,7 @@ class DBInterface(object):
                 try:
                     all_project_ids = [str(uuid.UUID(context['tenant']))]
                 except ValueError:
-                    all_project_ids = self.vnc_project_id(context['tenant'])
+                    all_project_ids = [self.vnc_project_id(context['tenant'])]
             elif 'id' in filters:
                 # TODO optimize
                 for port_id in filters['id']:
