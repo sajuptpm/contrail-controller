@@ -832,7 +832,7 @@ class DBInterface(object):
 
                             filter_value = [str(uuid.UUID(t_id)) \
                                             for t_id in filters[key_name]]
-                    else
+                    else:
                         filter_value = filters[key_name]
                     if key_name == 'tenant_id':
                         try:
