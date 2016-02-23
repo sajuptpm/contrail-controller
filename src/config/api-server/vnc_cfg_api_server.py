@@ -780,29 +780,30 @@ class VncApiServer(VncApiServerGen):
 
             #parent_uuids = [str(uuid.UUID(p_uuid)) for p_uuid in parent_ids]
 
-            
+            parent_uuids = []
             for p_uuid in parent_ids:
                 try:
                     project_id = str(uuid.UUID(p_uuid))
                 except ValueError:
                     project_id = self.vnc_project_id(p_uuid)
 
-                parent_uuids = [project_id]
+                parent_uuids.append(project_id)
             
         except KeyError:
             parent_uuids = None
-
+          
         try:
             back_ref_ids = bottle.request.json['back_ref_id'].split(',')
             #back_ref_uuids = [str(uuid.UUID(b_uuid)) for b_uuid in back_ref_ids]
-            
+
+            back_ref_uuids = []
             for br_uuid in back_ref_ids:
                 try:
                     br_id = str(uuid.UUID(br_uuid))
                 except ValueError:
                     br_id = self.vnc_project_id(br_uuid)
 
-                back_ref_ids = [br_id]
+                back_ref_uuids.append(br_id)
             
         except KeyError:
             back_ref_uuids = None
@@ -810,14 +811,15 @@ class VncApiServer(VncApiServerGen):
         try:
             obj_ids = bottle.request.json['obj_uuids'].split(',')
             #obj_uuids = [str(uuid.UUID(b_uuid)) for b_uuid in obj_ids]
-            
+
+            obj_uuids = []
             for ob_uuid in obj_ids:
                 try:
                     obj_id = str(uuid.UUID(ob_uuid))
                 except ValueError:
                     obj_id = self.vnc_project_id(ob_uuid)
 
-                obj_uuids = [obj_id]
+                obj_uuids.append(obj_id)
             
         except KeyError:
             obj_uuids = None
