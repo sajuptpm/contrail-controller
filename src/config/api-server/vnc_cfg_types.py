@@ -934,6 +934,22 @@ def _check_policy_rule_port_range(entries):
                 return (409, "Invalid port range" + ': ' + pformat(dst_ports))
 # end _check_policy_rule_port_range
 
+def _check_policy_rules(entries):
+    if not entries:
+        return True, ""
+    rules = entries.get('policy_rule') or []
+    rules_no_uuid = [dict((k, v) for k, v in r.items() if k != 'rule_uuid')
+                     for r in rules]
+    for index, rule in enumerate(rules_no_uuid):
+        rules_no_uuid[index] = None
+        if rule in rules_no_uuid:
+            try:
+                rule_uuid = rules[index]['rule_uuid']
+            except KeyError:
+                rule_uuid = None
+            return False, rule_uuid
+    return True, ""
+
 class SecurityGroupServer(SecurityGroupServerGen):
     generate_default_instance = False
 
@@ -986,7 +1002,9 @@ class SecurityGroupServer(SecurityGroupServerGen):
                                         proj_dict, obj_type, rule_count-1)
                 if not ok:
                     return (False, (403, pformat(fq_name) + ' : ' + quota_limit))
-
+        status, rule_uuid = _check_policy_rules(obj_dict.get('security_group_entries'))
+        if not status:
+            return (False, (409, 'Rule already exists : %s' % rule_uuid))
         err_msg = _check_policy_rule_port_range(obj_dict.get('security_group_entries'))
         if err_msg:
             return (False, err_msg)
