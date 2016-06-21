@@ -3737,9 +3737,10 @@ class DBInterface(object):
             else:
                 instance_id = None
         if port_obj.get_logical_router_back_refs():
-            self._raise_contrail_exception('L3PortInUse', port_id=port_id,
-                device_owner=constants.DEVICE_OWNER_ROUTER_INTF)
-
+            reason = 'Port has logical router attached'
+            self._raise_contrail_exception('ServicePortInUse',
+                                            port_id=port_id,
+                                            reason=reason)
         # release instance IP address
         iip_back_refs = getattr(port_obj, 'instance_ip_back_refs', None)
         if iip_back_refs:
